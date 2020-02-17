@@ -51,7 +51,6 @@ export default class Blog544 {
 
   static async make(meta, options) {
     var new_blog = new Blog544(meta, options);
-    new_blog.used_ids = [];
     return new_blog;
   }
 
@@ -63,12 +62,43 @@ export default class Blog544 {
   }
 
   /** Create a blog object as per createSpecs and 
-   * return id of newly created object 
+   * return id of newly created object
    */
   async create(category, createSpecs) {
     const obj = this.validator.validate(category, 'create', createSpecs);
+    var new_id = random_id(this, category); // Call our random_id function
+    if(category === "comments"){
+      this.comments[new_id] = obj;
+      if(!(obj.articleId in this.articles)){
+        const msg = `invalid id ${obj.articleId} for articles in create comment`;
+        throw [ new BlogError('BAD_ID', msg)];
+      }
+
+      if(!(obj.commenterId in this.users)){
+        const msg = `invalid id ${obj.commenterId} for commenter in create comment`;
+        throw [ new BlogError('BAD_ID', msg)];
+      }
+    } else if(category == "articles"){
+      if(!(obj.authorId in this.users)){
+        const msg =
+        `invalid id ${obj.authorId} for users in create articles`;
+        throw [ new BlogError('BAD_ID', msg) ];
+      }
+      this.articles[new_id] = obj;
+    } else if(category === "users"){
+      if(obj.id in this.users){
+        const msg =
+            `object with id ${obj.id} already exists for ${category}`;
+          throw [ new BlogError('EXISTS', msg) ];
+      }
+      this.users[obj.id] = obj;
+      return obj.id;
+    }
+
+    
 
     //@TODO
+    return new_id;
   }
 
   /** Find blog objects from category which meets findSpec.  Returns
@@ -101,18 +131,29 @@ const DEFAULT_COUNT = 5;
 
 //You can add code here and refer to it from any methods in Blog544.
 
-function random_id(category){
+function random_id(obj, category){
   var preface;
-  if(category == 'articles'){
+  if(category === 'articles'){
     preface = "A";
-  } else if (category == 'comments'){
+  } else if (category === 'comments'){
     preface = "C";
   }
 
+  
+
   var u_id = preface + Math.floor(Math.random() * Math.floor(10000));
-  while(used_ids.includes(u_id)){
-    u_id = preface + Math.floor(Math.random() * Math.floor(10000));
+
+  // While loop to ensure unique
+
+  if(category === "articles"){
+    while(u_id in obj.articles){
+      u_id = preface + Math.floor(Math.random() * Math.floor(10000));
+    }
+  } else if(category === "comments"){
+    while(u_id in obj.comments){
+      u_id = preface + Math.floor(Math.random() * Math.floor(10000));
+    }
   }
-  used_ids.push(u_id);
+  
   return u_id;
 }
