@@ -44,16 +44,22 @@ export default class Blog544 {
     this.meta = meta;
     this.options = options;
     this.validator = new Validator(meta);
+    this.users = {};
+    this.articles = {};
+    this.comments = {};
   }
 
   static async make(meta, options) {
-    //@TODO
-    return new Blog544(meta, options);
+    var new_blog = new Blog544(meta, options);
+    new_blog.used_ids = [];
+    return new_blog;
   }
 
   /** Remove all data for this blog */
   async clear() {
-    //@TODO
+    this.users = {};
+    this.articles = {};
+    this.comments = {};
   }
 
   /** Create a blog object as per createSpecs and 
@@ -61,6 +67,7 @@ export default class Blog544 {
    */
   async create(category, createSpecs) {
     const obj = this.validator.validate(category, 'create', createSpecs);
+
     //@TODO
   }
 
@@ -93,3 +100,19 @@ export default class Blog544 {
 const DEFAULT_COUNT = 5;
 
 //You can add code here and refer to it from any methods in Blog544.
+
+function random_id(category){
+  var preface;
+  if(category == 'articles'){
+    preface = "A";
+  } else if (category == 'comments'){
+    preface = "C";
+  }
+
+  var u_id = preface + Math.floor(Math.random() * Math.floor(10000));
+  while(used_ids.includes(u_id)){
+    u_id = preface + Math.floor(Math.random() * Math.floor(10000));
+  }
+  used_ids.push(u_id);
+  return u_id;
+}
