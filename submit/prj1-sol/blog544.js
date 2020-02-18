@@ -68,7 +68,6 @@ export default class Blog544 {
     const obj = this.validator.validate(category, 'create', createSpecs);
     var new_id = random_id(this, category); // Call our random_id function
     if(category === "comments"){
-      this.comments[new_id] = obj;
       if(!(obj.articleId in this.articles)){
         const msg = `invalid id ${obj.articleId} for articles in create comment`;
         throw [ new BlogError('BAD_ID', msg)];
@@ -78,6 +77,10 @@ export default class Blog544 {
         const msg = `invalid id ${obj.commenterId} for commenter in create comment`;
         throw [ new BlogError('BAD_ID', msg)];
       }
+
+      this.comments[new_id] = obj;
+      this.comments[new_id].id = new_id;
+
     } else if(category == "articles"){
       if(!(obj.authorId in this.users)){
         const msg =
@@ -85,6 +88,7 @@ export default class Blog544 {
         throw [ new BlogError('BAD_ID', msg) ];
       }
       this.articles[new_id] = obj;
+      this.articles[new_id].id = new_id;
     } else if(category === "users"){
       if(obj.id in this.users){
         const msg =
@@ -108,7 +112,61 @@ export default class Blog544 {
   async find(category, findSpecs={}) {
     const obj = this.validator.validate(category, 'find', findSpecs);
     //@TODO
-    return [];
+    if(!findSpecs._count){ // JAVASCRIPT TRUTHYNESS WOAHHHHHH
+      findSpecs._count = DEFAULT_COUNT;
+    }
+
+    var count = findSpecs._count;
+    var found = [];
+    // console.log(findSpecs);
+    var counted = 0;
+    if(category === "users"){
+      for(var user in this.users){
+        if(counted >= count){continue;}
+        if(findSpecs.id){ // If we're searching for a specific ID
+          if(this.users[user].id === findSpecs.id){
+            found.push(this.users[user]);
+            // console.log(user);
+            counted++;
+          }
+        } else { // Not looking for an ID
+          found.push(this.users[user]);
+          // console.log(user);
+          counted++;
+        }
+      }
+    } else if(category === "articles"){
+      for(var article in this.articles){
+        // console.log(article);
+        // console.log(this.articles[article]);
+        if(counted >= count){continue};
+        if(findSpecs.id){
+          if(this.articles[article].id === findSpecs.id){
+            found.push(this.articles[article]);
+            counted++;
+          }
+        } else {
+          found.push(this.articles[article]);
+          counted++;
+        }
+      }
+
+    } else if(category === "comments"){
+      for(var comment in this.comments){
+        if(counted >= count){continue};
+        if(findSpecs.id){
+          if(this.comments[comment].id === findSpecs.id){
+            found.push(this.comments[comment]);
+            counted++;
+          }
+        } else {
+          found.push(this.comments[comment]);
+          counted++;
+        }
+      }
+      
+    }
+    return found;
   }
 
   /** Remove up to one blog object from category with id == rmSpecs.id. */
