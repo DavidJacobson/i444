@@ -110,6 +110,13 @@ export default class Blog544 {
    *  list if no matching objects).  _count defaults to DEFAULT_COUNT.
    */
   async find(category, findSpecs={}) {
+    // this.options["verbose"]
+
+
+    // NOTE ABOUT VERBOSE
+
+    // i have no idea index is.
+    
     const obj = this.validator.validate(category, 'find', findSpecs);
     //@TODO
     if(!findSpecs._count){ // JAVASCRIPT TRUTHYNESS WOAHHHHHH
@@ -244,6 +251,26 @@ export default class Blog544 {
   async update(category, updateSpecs) {
     const obj = this.validator.validate(category, 'update', updateSpecs);
     //@TODO
+    if(category === "users"){
+      for(var user in this.users){
+        if(this.users[user].id == updateSpecs.id){
+          Object.assign(this.users[user], updateSpecs);
+        }
+      }
+    } else if(category === "articles"){
+      for(var articles in this.articles){
+        if(this.articles[article].id === updateSpecs.id){
+          Object.assign(this.articles[article], updateSpecs);
+        }
+      }
+    } else if(category === "comments"){
+      for(var comments in this.comments){
+        if(this.comments[comment].id === updateSpecs.id){
+          Object.assign(this.comments[comment], updateSpecs);
+        }
+      }
+    }
+    console.log(updateSpecs);
   }
   
 }
