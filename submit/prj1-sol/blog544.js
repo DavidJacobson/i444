@@ -192,11 +192,48 @@ export default class Blog544 {
               const msg =
               `articles id ${this.comments[comment].articleId} referenced by comments ${this.comments[comment].id}`;
               throw [ new BlogError('BAD_ID', msg) ];
+              return;
             }
           }
           delete this.articles[article];
         }
       }
+    } else if(category === "users"){
+      var ref_articles = [];
+      var ref_comments = [];
+      for(var article in this.articles){
+        if(this.articles[article].authorId === rmSpecs.id){
+          ref_articles.push(article);
+        }
+      }
+      for(var comment in this.comments){
+        if(this.comments[comment].commenterId === rmSpecs.id){
+          ref_comments.push(comment);
+        }
+      }
+
+      var errors = [];
+      if(ref_articles.length != 0){
+        const msg =
+        `users id=${rmSpecs.id} referenced by authorId for articles ${ref_articles.join(", ")}`;
+        errors.push(new BlogError('BAD_ID', msg))
+      }
+
+      if(ref_comments.length != 0){
+        const msg =
+        `users id=${rmSpecs.id} referenced by commenterId for comments ${ref_comments.join(", ")}`;
+        errors.push(new BlogError('BAD_ID', msg));
+      }
+
+
+      
+      if(ref_articles.length === 0 && ref_comments.length === 0){
+        delete this.users[rmSpecs.id];
+      } else {
+        throw errors;
+      }
+
+
     }
     //@TODO
   }
