@@ -2,5 +2,6 @@ Name:		David Jacobson
 B-Number:	B00684561
 Email:		djacobs7@binghamton.edu
 
-Add text here as needed.
-
+Note for graders: I implemented my solutions without having to use secondary indicies.
+As such, there was nothing to output when in verbose mode. I have a comment demonstrating that I
+can infact detect when the program is running in verbose mode, but I did not need to utilize it.
