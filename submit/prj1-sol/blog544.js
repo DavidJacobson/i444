@@ -172,6 +172,32 @@ export default class Blog544 {
   /** Remove up to one blog object from category with id == rmSpecs.id. */
   async remove(category, rmSpecs) {
     const obj = this.validator.validate(category, 'remove', rmSpecs);
+    if(category === "comments"){
+      for(var comment in this.comments){
+        if(this.comments[comment].id === rmSpecs.id){
+          delete this.comments[comment];
+        }
+      }
+    } else if(category === "articles"){
+      if(!(rmSpecs.id in this.articles)){
+        const msg =
+        `no articles for id ${rmSpecs.id} in remove`;
+        throw [ new BlogError('BAD_ID', msg) ];
+      }
+      for(var article in this.articles){
+        if(this.articles[article].id === rmSpecs.id){
+          // This is the article we want to delete. First, check if it's referenced by any comments.
+          for(var comment in this.comments){
+            if(this.comments[comment].articleId === rmSpecs.id){
+              const msg =
+              `articles id ${this.comments[comment].articleId} referenced by comments ${this.comments[comment].id}`;
+              throw [ new BlogError('BAD_ID', msg) ];
+            }
+          }
+          delete this.articles[article];
+        }
+      }
+    }
     //@TODO
   }
 
