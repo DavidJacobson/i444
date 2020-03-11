@@ -62,6 +62,12 @@ const META = {
       required: [ 'create', 'update', 'remove' ],
     },
     {
+      name: '_id',
+      friendlyName: 'Mongo internal ID',
+      forbidden: [ 'create', 'update', 'remove' ],
+      doIndex: false,
+    },
+    {
       name: 'email', 
       friendlyName: 'user email',
       checkFn: v => v.split('@').length === 2,

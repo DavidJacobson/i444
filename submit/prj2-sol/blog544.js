@@ -44,29 +44,42 @@ MISSING_FIELD:
 
 export default class Blog544 {
 
-  constructor(meta, options) {
+  constructor(meta, options, db, db_handler) {
     //@TODO
     this.meta = meta;
     this.options = options;
     this.validator = new Validator(meta);
+    this.db = db; // await mongo.connect() result
+    this.handler = db_handler;
   }
 
   /** options.dbUrl contains URL for mongo database */
   static async make(meta, options) {
-    //@TOD
-    return new Blog544(meta, options);
+    let match = /^mongodb:\/\/(\w+):(\d+)/.test(options.dbUrl); // Regex to match
+    if( !match){
+      const msg = "Bad host !";
+      throw [new BlogError('BAD_FIELD_VALUE', msg)];
+    }
+    const db_connection = await mongo.connect(options.dbUrl, MONGO_CONNECT_OPTIONS);
+    const db = db_connection.db('main');
+    return new Blog544(meta, options, db, db_connection);
   }
 
   /** Release all resources held by this blog.  Specifically, close
    *  any database connections.
    */
   async close() {
-    //@TODO
+    await this.handler.close();
+    return;
   }
 
   /** Remove all data for this blog */
   async clear() {
-    //@TODO
+    let collections = ["users", "comments", "articles"];
+    for(var collection of collections){
+      let this_collection = this.db.collection(collection);
+      await this_collection.deleteMany({});
+    }
   }
 
   /** Create a blog object as per createSpecs and 
@@ -74,7 +87,44 @@ export default class Blog544 {
    */
   async create(category, createSpecs) {
     const obj = this.validator.validate(category, 'create', createSpecs);
-    //@TODO
+    var new_id = random_id(this, category); // Call our random_id function
+    if(!obj.id){
+      obj.id = new_id;
+    }
+
+    // Some error checking
+    if(category === "commments"){
+      // Cant have a comment w/ an invalid commentor id...
+      if((await this.db.collection("users").find({id:createSpecs.commenterId}).toArray()).length === 0){
+        throw [new BlogError("BAD_FIELD_VALUE", "Need valid user id")];
+      }
+      if(await this.db.collection("articles").find({articleId: createSpecs.articleId}).toArray().length === 0){
+        throw [new BlogError("BAD_FIELD_VALUE", "Need valid article id")];
+      }
+    }
+
+    if(category === "articles"){
+      if(await this.db.collection("users").find({id: createSpecs.authorId}).toArray().length === 0){
+        throw [new BlogError("BAD_FIELD_VALUE", "Need valid author id for article")];
+      }
+    }
+
+
+    var table = this.db.collection(category);
+    var existing = [];
+    for(var result in await table.find({id: createSpecs.id}).toArray()){
+      if(result.length > 0){
+        existing.push(result);
+      }
+    }
+
+    if(existing.length != 0){
+      var msg = `bad ${category} with id: ${createSpecs.id}`;
+      throw [new BlogError("BAD_ID", msg)];
+    }
+
+    await table.insertOne(obj);
+    return new_id;
   }
 
   /** Find blog objects from category which meets findSpec.  
@@ -93,15 +143,63 @@ export default class Blog544 {
    *  
    */
   async find(category, findSpecs={}) {
+    if(!findSpecs._count){
+      findSpecs._count = DEFAULT_COUNT;
+    }
+
+    if(!findSpecs._index){
+      findSpecs._index = 0;
+    }
+
+
+    var index = findSpecs._index;
+    var count = findSpecs._count;
+
     const obj = this.validator.validate(category, 'find', findSpecs);
-    //@TODO
-    return [];
+    if(!["users", "comments", "articles"].includes(category)){
+      throw [new BlogError("BAD_CATEGORY", "Use a real category")];
+    }
+
+    var search_criteria = {}; // Dont need the _count or _index variables to be searched for
+    for(var k in findSpecs){
+      if(k !== "_count" && k !== "_index"){
+        search_criteria[k] = findSpecs[k];
+      }
+      if (k === "creationTime"){
+        // Search by less than the current date using query selector
+        search_criteria["creationTime"] = {"$lte": new Date(findSpecs[k])};
+      }
+    }
+    // console.log(search_criteria);
+    var table = this.db.collection(category);
+    let results = [];
+    let query_data = await table.find(search_criteria).skip(parseInt(index)).limit(parseInt(count, 10)).toArray();
+    // console.log(query_data);
+    for(var result of query_data){
+      results.push(result);
+    }
+
+    return results;
   }
 
   /** Remove up to one blog object from category with id == rmSpecs.id. */
   async remove(category, rmSpecs) {
     const obj = this.validator.validate(category, 'remove', rmSpecs);
-    //@TODO
+    var table = this.db.collection(category);
+    if(!rmSpecs.id){
+      throw [ new BlogError("BAD_ID", "Using remove requires a valid id")];
+    }
+
+
+    var to_delete;
+    var existing_objects = await table.find(rmSpecs).toArray();
+    if(existing_objects.length === 0){
+      throw [new BlogError("BAD_ID", "No object found with that id")];
+    } else {
+      to_delete = existing_objects[0]._id;
+    }
+
+    await table.deleteOne({_id: to_delete});
   }
 
   /** Update blog object updateSpecs.id from category as per
@@ -109,7 +207,44 @@ export default class Blog544 {
    */
   async update(category, updateSpecs) {
     const obj = this.validator.validate(category, 'update', updateSpecs);
-    //@TODO
+    var table = this.db.collection(category);
+    var existing_object = await table.find({id: updateSpecs.id}).toArray();
+    if( existing_object.length === 0){
+      throw [new BlogError("BAD_ID", "There is no object with that ID")];
+      return;
+    }
+
+    // Consistency stuff
+    if(category === "comments"){
+      if(updateSpecs.articleId){
+        if(this.db.collection("articles").find({articleId: updateSpecs.articleId}).toArray().length === 0){
+          throw [new BlogError("BAD_FIELD_VALUE", "article for comment update does not exist")];
+        }
+      }
+      if(updateSpecs.commenterId){
+        if(this.db.collection("users").find({id:updateSpecs.commenterId}).toArray().length === 0){
+          throw [ new BlogError("BAD_FIELD_VALUE", "Need a valid user to update articles...")]
+        }
+      }
+    }
+
+    if(category === "articles"){
+      if(updateSpecs.authorId){
+        if(this.db.collection("users").find({id:updateSpecs.authorId}).toArray() === 0){
+          throw [new BlogError("BAD_FIELD_VALUE", "Invalid author")];
+        }
+      }
+    }
+
+
+    // Keep track of the update time...
+    updateSpecs["updateTime"] = new Date();
+    // console.log(existing_object);
+    // Update via mongo _id per specs
+    var internal_mongo_id = existing_object[0]._id;
+    await table.updateOne({_id: internal_mongo_id}, {$set: updateSpecs});
+    // console.log(internal_mongo_id);
+    
   }
   
 }
@@ -117,3 +252,15 @@ export default class Blog544 {
 const DEFAULT_COUNT = 5;
 
 const MONGO_CONNECT_OPTIONS = { useUnifiedTopology: true };
+
+// Taken from me - project 1...
+function random_id(obj, category){
+  var preface;
+  if(category == 'articles'){
+    preface = "A";
+  } else if (category == 'comments'){
+    preface = "C";
+  }
+  var u_id = preface + Math.floor(Math.random() * Math.floor(10000));
+  return u_id;
+}
