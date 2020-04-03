@@ -48,7 +48,7 @@ export default function serve(port, meta, model) {
         each["links"] = [{"href": requestUrl(req) + "/" + each['id'], "name": "self", "rel":"self"}];
       }
 
-      if(params["_count"] !== undefined && params["_index"] !== undefined){
+      if(params["_count"] !== undefined || params["_index"] !== undefined){
         var new_params = params;
         var second_set = params;
         new_params["_index"] = Number(new_params["_index"]);
