@@ -6,6 +6,7 @@ import querystring from 'querystring';
 import META from './meta.js';
 
 import BlogError from './blog-error.js';
+import { compileFunction } from 'vm';
 
 const OK = 200;
 const CREATED = 201;
@@ -14,13 +15,9 @@ const NOT_FOUND = 404;
 const CONFLICT = 409;
 const SERVER_ERROR = 500;
 
-function base_url_handler(req, res){
-  res.send("main");
-}
-
 class Link{
-  constructor(req, name, rel){
-    this.href = requestUrl(req); // Use prewritten utility function to generate href
+  constructor(href, name, rel){
+    this.href = href;
     this.name = name;
     this.rel = rel;
   }
@@ -31,42 +28,120 @@ export default function serve(port, meta, model) {
   app.locals.port = port;
   app.locals.meta = meta;
   app.locals.model = model;
-
-  for(const blog_type in META){
-    let route = "/" + blog_type + "/";
-    let specific_route = "/" + blog_type + "/:id"; 
-    app.get(route, function(req, res){
-      res.send(route);
-    })
-
-    app.get(specific_route, function(req, res){
-      app.locals.model.find(blog_type, {id: req.params.id}).then(data => res.json(data));
-    })
-
-    app.post(blog_type, function(req, res){
-      res.send("testsetsetest");
-    })
-
-    app.delete(specific_route, function(req, res){
-      res.send("deleting");
-    })
-
-    app.patch(specific_route, function(req, res){
-      res.send("patching");
-    })
-
-  }
-
-  app.get("/", base_url_handler);
-  app.get("/meta-info/", function(req, res){
-    res.json(app.locals.meta);
-  });
-
-
   setupRoutes(app);
   app.listen(port, function() {
     console.log(`listening on port ${port}`);
   });
+
+  for(const blog_type in META){
+    let route = "/" + blog_type + "/";
+    let specific_route = "/" + blog_type + "/:id"; 
+
+
+    app.get(route, async function(req, res){
+      var params = req.query;
+      var results = {};
+      results[blog_type] = await app.locals.model.find(blog_type, params); 
+      results["links"] = [{"href": requestUrl(req) + "/?" + querystring.stringify(params), "name": "self", "rel":"self"}];
+
+      for(var each of results[blog_type]){
+        each["links"] = [{"href": requestUrl(req) + "/" + each['id'], "name": "self", "rel":"self"}];
+      }
+
+      if(params["_count"] !== undefined && params["_index"] !== undefined){
+        var new_params = params;
+        var second_set = params;
+        new_params["_index"] = Number(new_params["_index"]);
+        new_params["_index"] += Number(params["_count"]);
+        results["links"].push({"href": requestUrl(req) + "/?" + querystring.stringify(new_params), "rel": "next", "name": "next"});
+        // console.log("here");
+
+        new_params["_index"] -= Number(params["_count"]);
+
+
+        if(new_params["_index"] - Number(params["_count"]) >= 0){
+          new_params["_index"] -= Number(params["_count"]);
+        } else {
+          new_params["_index"] = 0;
+        }
+        results["links"].push({"href": requestUrl(req) + "/?" + querystring.stringify(new_params), "rel": "prev", "name": "prev"});
+
+      }
+
+      // console.log(params);
+      res.json(results);
+
+    })
+
+    app.get(specific_route, async function(req, res){
+      let data = {};
+      data[blog_type] = await app.locals.model.find(blog_type, {id: req.params.id});
+      data["links"] = [generateLink(req)];
+      res.json(data);
+    })
+
+    app.post(route, async function(req, res){
+      var to_create = req.body;
+      var new_id;
+      try{
+        new_id = await app.locals.model.create(blog_type, to_create);
+        var new_url = requestUrl(req) + "/" + new_id;
+        res.append('Location', new_url);
+        res.status(201).json({})
+        // console.log(new_url);
+        // res.send(new_url);
+      } catch (err){
+        res.json(err);
+      }
+    })
+
+    app.delete(specific_route, async function(req, res){
+      var to_delete = req.params.id;
+      // console.log("dleteing id: " + to_delete);
+      var data = {};
+      try{
+        await app.locals.model.remove(blog_type, {id: to_delete});
+      } catch(err){
+        // console.log(err);
+        res.status(400).json(err);
+      }
+      res.json(data);
+      
+    })
+
+    app.patch(specific_route, async function(req, res){
+      var id_to_update = req.params.id;
+      var update_params = req.body;
+      update_params["id"] = id_to_update;
+      try{
+        await app.locals.model.update(blog_type, update_params);
+      } catch(err){
+        res.json(err);
+      }
+
+      
+      res.send({});
+    })
+
+  }
+
+  app.get("/", function(req, res){
+    let data = {};
+    let meta_link = new Link("/meta-info/", "meta", "describedby");
+    data["links"] = [generateLink(req), meta_link, new Link("/users/", "users", "collection"), new Link("/articles/", "articles", "collection"), 
+      new Link("/comments/", "comments", "collection")
+    ];
+    res.json(data);
+  });
+  app.get("/meta-info/", function(req, res){
+    let data = app.locals.meta;
+    data["links"] = [generateLink(req)];
+
+    res.json(data);
+  });
+
+
+
 }
 
 function setupRoutes(app) {
@@ -141,7 +216,7 @@ function requestUrl(req) {
 
 // Given a request, create a self link
 function generateLink(req){
-  let link = Link(req=req, rel="self", "self");
+  let link = new Link(requestUrl(req), "self", "self");
   return link;
 }
 
